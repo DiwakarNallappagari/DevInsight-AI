@@ -1,0 +1,783 @@
+import React, { useState, useRef } from 'react';
+import Editor from '@monaco-editor/react';
+import { jsPDF } from 'jspdf';
+import api from '../utils/api';
+
+// ── PDF Export Helper ───────────────────────────────────────────────────────
+const exportPDF = (result, language) => {
+  if (!result) return;
+
+  const doc = new jsPDF();
+  const lineH = 7;
+  let y = 20;
+
+  const addLine = (text, opts = {}) => {
+    const fontSize = opts.fontSize || 11;
+    const color = opts.color || [220, 220, 220];
+    doc.setFontSize(fontSize);
+    doc.setTextColor(...color);
+    const lines = doc.splitTextToSize(text, 170);
+    lines.forEach((line) => {
+      if (y > 275) { doc.addPage(); y = 20; }
+      doc.text(line, opts.x || 20, y);
+      y += lineH;
+    });
+  };
+
+  const addSection = (title, color = [100, 130, 255]) => {
+    y += 3;
+    if (y > 270) { doc.addPage(); y = 20; }
+    doc.setFillColor(...color);
+    doc.roundedRect(18, y - 5, 174, 8, 2, 2, 'F');
+    doc.setFontSize(10);
+    doc.setTextColor(255, 255, 255);
+    doc.text(title, 22, y);
+    y += lineH;
+  };
+
+  // ── Dark background ───────────────────────────────────────────────────────
+  doc.setFillColor(10, 15, 30);
+  doc.rect(0, 0, 210, 297, 'F');
+
+  // ── Header ────────────────────────────────────────────────────────────────
+  doc.setFontSize(22);
+  doc.setTextColor(14, 165, 233);
+  doc.text('DevInsight AI', 20, y);
+  y += 9;
+  doc.setFontSize(11);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Code Analysis Report — ${language}`, 20, y);
+  y += 6;
+  doc.text(`Generated: ${new Date().toLocaleString()}`, 20, y);
+  y += 10;
+
+  // ── Score bar ─────────────────────────────────────────────────────────────
+  const score = result.score || 0;
+  const scoreColor = score >= 80 ? [16, 185, 129] : score >= 60 ? [245, 158, 11] : [239, 68, 68];
+  doc.setFillColor(30, 41, 59);
+  doc.roundedRect(20, y, 170, 12, 3, 3, 'F');
+  doc.setFillColor(...scoreColor);
+  doc.roundedRect(20, y, Math.round(1.7 * score), 12, 3, 3, 'F');
+  doc.setFontSize(10);
+  doc.setTextColor(255, 255, 255);
+  doc.text(`Quality Score: ${score}/100`, 24, y + 8);
+  y += 18;
+
+  // ── Complexity ────────────────────────────────────────────────────────────
+  addLine(`Complexity: ${result.estimated_complexity || '—'}`, { color: [148, 163, 184], fontSize: 10 });
+  y += 2;
+
+  // ── Summary ───────────────────────────────────────────────────────────────
+  if (result.summary) {
+    addSection('Summary', [51, 65, 85]);
+    addLine(result.summary, { color: [203, 213, 225], x: 22 });
+    y += 2;
+  }
+
+  // ── Bugs ──────────────────────────────────────────────────────────────────
+  if (result.bugs && result.bugs.length > 0) {
+    addSection(`🐛  P1 Issues (${result.bugs.length})`, [185, 28, 28]);
+    result.bugs.forEach((b, i) => addLine(`${i + 1}. ${b.replace(/[^\x20-\x7E]/g, '')}`, { color: [252, 165, 165], x: 24 }));
+    y += 2;
+  }
+
+  // ── Improvements ─────────────────────────────────────────────────────────
+  if (result.improvements && result.improvements.length > 0) {
+    addSection(`⚡  Improvements (${result.improvements.length})`, [120, 90, 10]);
+    result.improvements.forEach((imp, i) => addLine(`${i + 1}. ${imp.replace(/[^\x20-\x7E]/g, '')}`, { color: [253, 230, 138], x: 24 }));
+    y += 2;
+  }
+
+  // ── Security ─────────────────────────────────────────────────────────────
+  if (result.security && result.security.length > 0) {
+    addSection(`🔒  Security (${result.security.length})`, [180, 70, 10]);
+    result.security.forEach((s, i) => addLine(`${i + 1}. ${s.replace(/[^\x20-\x7E]/g, '')}`, { color: [253, 186, 116], x: 24 }));
+    y += 2;
+  }
+
+  // ── AI Suggestions ────────────────────────────────────────────────────────
+  if (result.suggestions && result.suggestions.length > 0) {
+    addSection('💡  AI Suggestions', [88, 28, 135]);
+    result.suggestions.forEach((s, i) => addLine(`${i + 1}. ${s.replace(/[^\x20-\x7E]/g, '')}`, { color: [216, 180, 254], x: 24 }));
+  }
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`DevInsight AI  —  Page ${i} of ${pageCount}`, 20, 290);
+  }
+
+  doc.save(`devinsight-report-${Date.now()}.pdf`);
+};
+
+// ── Share report as text to clipboard ────────────────────────────────────────
+const getShareText = (result, language) => {
+  if (!result) return '';
+  const lines = [
+    `📊 DevInsight AI Report — ${language}`,
+    `Score: ${result.score}/100  |  Complexity: ${result.estimated_complexity}`,
+    result.summary || '',
+    result.bugs?.length ? `\n🐛 Issues: ${result.bugs.length}` : '',
+    result.improvements?.length ? `⚡ Improvements: ${result.improvements.length}` : '',
+    result.security?.length ? `🔒 Security: ${result.security.length}` : '',
+    `\nGenerated by DevInsight AI`,
+  ];
+  return lines.filter(Boolean).join('\n');
+};
+
+// ── Detect issue patterns in raw code for Monaco markers ─────────────────────
+const getCodeMarkers = (code, monacoRef) => {
+  if (!monacoRef || !code) return [];
+  const markers = [];
+  const lines = code.split('\n');
+
+  lines.forEach((line, idx) => {
+    const lineNum = idx + 1;
+
+    if (/\bvar\s+/.test(line)) {
+      markers.push({
+        startLineNumber: lineNum, endLineNumber: lineNum,
+        startColumn: line.indexOf('var') + 1, endColumn: line.length + 1,
+        message: "Avoid 'var'. Use 'const' or 'let' to prevent hoisting issues.",
+        severity: monacoRef.MarkerSeverity.Warning,
+      });
+    }
+    if (/console\.log/.test(line)) {
+      markers.push({
+        startLineNumber: lineNum, endLineNumber: lineNum,
+        startColumn: line.indexOf('console.log') + 1, endColumn: line.length + 1,
+        message: "Remove console.log() before production deployment.",
+        severity: monacoRef.MarkerSeverity.Hint,
+      });
+    }
+    if (/[^=!<>]==[^=]/.test(line)) {
+      const col = line.search(/[^=!<>]==[^=]/);
+      markers.push({
+        startLineNumber: lineNum, endLineNumber: lineNum,
+        startColumn: col + 2, endColumn: col + 4,
+        message: "Use '===' (strict equality) instead of '==' to avoid type coercion bugs.",
+        severity: monacoRef.MarkerSeverity.Warning,
+      });
+    }
+    if (/\beval\s*\(/.test(line)) {
+      markers.push({
+        startLineNumber: lineNum, endLineNumber: lineNum,
+        startColumn: line.indexOf('eval') + 1, endColumn: line.length + 1,
+        message: "🔴 CRITICAL: eval() is a security vulnerability. Never use it.",
+        severity: monacoRef.MarkerSeverity.Error,
+      });
+    }
+    // Unclosed Scanner in Java
+    if (/new\s+Scanner/.test(line)) {
+      markers.push({
+        startLineNumber: lineNum, endLineNumber: lineNum,
+        startColumn: line.indexOf('Scanner') + 1, endColumn: line.length + 1,
+        message: "⚠️ Scanner should be closed. Use try-with-resources or call .close().",
+        severity: monacoRef.MarkerSeverity.Warning,
+      });
+    }
+    // Missing try-catch around parseInt / parseDouble
+    if (/Integer\.parseInt|Double\.parseDouble/.test(line)) {
+      markers.push({
+        startLineNumber: lineNum, endLineNumber: lineNum,
+        startColumn: 1, endColumn: line.length + 1,
+        message: "⚠️ Parsing can throw NumberFormatException. Wrap in try-catch.",
+        severity: monacoRef.MarkerSeverity.Warning,
+      });
+    }
+  });
+
+  return markers;
+};
+
+// ── Language options ──────────────────────────────────────────────────────────
+const LANGUAGES = [
+  { value: 'javascript', label: 'JavaScript' },
+  { value: 'typescript', label: 'TypeScript' },
+  { value: 'python', label: 'Python' },
+  { value: 'java', label: 'Java' },
+  { value: 'go', label: 'Go' },
+  { value: 'other', label: 'Other' },
+];
+
+const LANG_LABEL = (v) => LANGUAGES.find((l) => l.value === v)?.label || v;
+
+const MONACO_LANG = (v) => {
+  if (v === 'typescript') return 'typescript';
+  if (v === 'python') return 'python';
+  if (v === 'java') return 'java';
+  if (v === 'go') return 'go';
+  return 'javascript';
+};
+
+// ── Toast component ───────────────────────────────────────────────────────────
+const Toast = ({ message, show }) => (
+  <div
+    className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-all duration-300 ${
+      show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+    }`}
+  >
+    ✅ {message}
+  </div>
+);
+
+const CodeReviewPage = () => {
+  const [language, setLanguage] = useState('javascript');
+  const [code, setCode] = useState('// Paste your code here for DevInsight AI to review');
+  const [loading, setLoading] = useState(false);
+  const [explainLoading, setExplainLoading] = useState(false);
+  const [simpleLoading, setSimpleLoading] = useState(false);
+  const [refactorLoading, setRefactorLoading] = useState(false);
+  const [githubLoading, setGithubLoading] = useState(false);
+  const [showGithubModal, setShowGithubModal] = useState(false);
+  const [githubUrl, setGithubUrl] = useState('');
+  const [result, setResult] = useState(null);
+  const [explanation, setExplanation] = useState('');
+  const [simpleExplanation, setSimpleExplanation] = useState('');
+  const [error, setError] = useState('');
+  const [limitBlocked, setLimitBlocked] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: '' });
+
+  // Refs for Monaco editor instance + monaco API
+  const editorRef = useRef(null);
+  const monacoRef = useRef(null);
+
+  const showToast = (message) => {
+    setToast({ show: true, message });
+    setTimeout(() => setToast({ show: false, message: '' }), 2200);
+  };
+
+  const handleEditorMount = (editor, monaco) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+  };
+
+  const applyMarkers = (currentCode, currentResult) => {
+    if (!editorRef.current || !monacoRef.current) return;
+    const model = editorRef.current.getModel();
+    if (!model) return;
+
+    // Pattern-based markers
+    const patternMarkers = getCodeMarkers(currentCode, monacoRef.current);
+
+    // Result-based: add first-line markers for bugs that mention specific terms
+    const resultMarkers = [];
+    const bugTerms = (currentResult?.bugs || []).concat(currentResult?.security || []);
+    bugTerms.forEach((msg) => {
+      const cleaned = msg.replace(/[^\x20-\x7E]/g, '');
+      resultMarkers.push({
+        startLineNumber: 1, endLineNumber: 1,
+        startColumn: 1, endColumn: 2,
+        message: cleaned,
+        severity: monacoRef.current.MarkerSeverity.Error,
+      });
+    });
+
+    monacoRef.current.editor.setModelMarkers(model, 'devinsight', [
+      ...patternMarkers,
+      ...resultMarkers,
+    ]);
+  };
+
+  const handleAnalyze = async () => {
+    setLoading(true);
+    setError('');
+    setResult(null);
+    setExplanation('');
+    setSimpleExplanation('');
+    setLimitBlocked(false);
+    // Clear old markers
+    if (editorRef.current && monacoRef.current) {
+      monacoRef.current.editor.setModelMarkers(editorRef.current.getModel(), 'devinsight', []);
+    }
+    try {
+      const res = await api.post('/analyze', { code, language: LANG_LABEL(language) });
+      setResult(res.data);
+      applyMarkers(code, res.data);
+      if (res.data.remainingToday === 0) setLimitBlocked(true);
+    } catch (err) {
+      if (err?.response?.status === 429) {
+        setLimitBlocked(true);
+        setError(err?.response?.data?.message || 'Daily limit reached');
+      } else {
+        setError(err?.response?.data?.message || 'Failed to analyze code');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExplain = async () => {
+    setExplainLoading(true);
+    setError('');
+    setExplanation('');
+    try {
+      const res = await api.post('/explain', { code, language });
+      setExplanation(res.data.explanation);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to get code explanation');
+    } finally {
+      setExplainLoading(false);
+    }
+  };
+
+  const handleExplainSimply = async () => {
+    setSimpleLoading(true);
+    setError('');
+    setSimpleExplanation('');
+    try {
+      const res = await api.post('/explain-simple', { code, language: LANG_LABEL(language) });
+      setSimpleExplanation(res.data.explanation);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to get simple explanation');
+    } finally {
+      setSimpleLoading(false);
+    }
+  };
+
+  const handleRefactor = async () => {
+    setRefactorLoading(true);
+    setError('');
+    try {
+      const res = await api.post('/refactor', { code, language: LANG_LABEL(language) });
+      setCode(res.data.refactoredCode);
+      showToast('Code refactored successfully! ✨');
+      // Clear old markers as code changed
+      if (editorRef.current && monacoRef.current) {
+        monacoRef.current.editor.setModelMarkers(editorRef.current.getModel(), 'devinsight', []);
+      }
+      setResult(null); // Reset analysis as code changed
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to refactor code');
+    } finally {
+      setRefactorLoading(false);
+    }
+  };
+
+  const handleGithubAnalyze = async () => {
+    if (!githubUrl.includes('github.com')) {
+      setError('Please enter a valid GitHub repository URL');
+      return;
+    }
+    setGithubLoading(true);
+    setError('');
+    setShowGithubModal(false);
+    try {
+      const res = await api.post('/github/analyze', { repoUrl: githubUrl });
+      setCode(res.data.refCode);
+      setLanguage(res.data.refLanguage);
+      setResult(res.data);
+      applyMarkers(res.data.refCode, res.data);
+      showToast(`Imported & Analyzed ${res.data.repoName}! 📦`);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to analyze GitHub repository');
+    } finally {
+      setGithubLoading(false);
+    }
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const ext = file.name.split('.').pop();
+    if (ext === 'js') setLanguage('javascript');
+    else if (ext === 'ts') setLanguage('typescript');
+    else if (ext === 'py') setLanguage('python');
+    else if (ext === 'java') setLanguage('java');
+    else if (ext === 'go') setLanguage('go');
+    const reader = new FileReader();
+    reader.onload = (event) => setCode(event.target.result);
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleExport = () => {
+    exportPDF(result, LANG_LABEL(language));
+    showToast('PDF downloaded!');
+  };
+
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(code).then(() => showToast('Code copied!'));
+  };
+
+  const handleShare = () => {
+    const text = getShareText(result, LANG_LABEL(language));
+    navigator.clipboard.writeText(text).then(() => showToast('Report copied to clipboard!'));
+  };
+
+  const scoreColor = (s) =>
+    s >= 80 ? 'text-emerald-400' : s >= 60 ? 'text-yellow-400' : 'text-rose-400';
+
+  return (
+    <>
+      <Toast message={toast.message} show={toast.show} />
+      <div className="grid gap-4 lg:grid-cols-2 h-[calc(100vh-4.5rem)]">
+        {/* ── Left: Editor ──────────────────────────────────────────────────── */}
+        <div className="flex flex-col rounded-xl border border-slate-800 bg-slate-950/80">
+          {/* Toolbar */}
+          <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2 flex-wrap gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-medium text-slate-200">AI Code Review</span>
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+              >
+                {LANGUAGES.map((l) => (
+                  <option key={l.value} value={l.value}>{l.label}</option>
+                ))}
+              </select>
+              <label className="cursor-pointer rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700">
+                Upload File
+                <input
+                  type="file"
+                  accept=".js,.ts,.py,.java,.go,.txt"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+              </label>
+              {/* GitHub Repo Analyze */}
+              <button
+                type="button"
+                onClick={() => setShowGithubModal(true)}
+                disabled={githubLoading}
+                className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700 transition flex items-center gap-1"
+              >
+                {githubLoading ? '⌛ Importing...' : '📦 GitHub'}
+              </button>
+              {/* Copy Code */}
+              <button
+                type="button"
+                onClick={handleCopyCode}
+                title="Copy code to clipboard"
+                className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700 transition"
+              >
+                📋 Copy
+              </button>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={handleExplainSimply}
+                disabled={simpleLoading || loading || refactorLoading}
+                className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-emerald-600 disabled:opacity-60 transition"
+              >
+                {simpleLoading ? (
+                  <span className="flex items-center gap-1">
+                    <span className="animate-spin inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full" />
+                    Simplifying...
+                  </span>
+                ) : 'Explain Simply 🧒'}
+              </button>
+              <button
+                type="button"
+                onClick={handleRefactor}
+                disabled={refactorLoading || loading || explainLoading}
+                className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-amber-500 disabled:opacity-60 transition"
+              >
+                {refactorLoading ? (
+                  <span className="flex items-center gap-1">
+                    <span className="animate-spin inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full" />
+                    Refactoring...
+                  </span>
+                ) : 'Refactor Code 🪄'}
+              </button>
+              <button
+                type="button"
+                onClick={handleExplain}
+                disabled={explainLoading || loading || refactorLoading}
+                className="rounded-md bg-purple-600 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-purple-500 disabled:opacity-60 transition"
+              >
+                {explainLoading ? (
+                  <span className="flex items-center gap-1">
+                    <span className="animate-spin inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full" />
+                    Explaining...
+                  </span>
+                ) : 'Explain Code 🔥'}
+              </button>
+              <button
+                type="button"
+                onClick={handleAnalyze}
+                disabled={loading || explainLoading || limitBlocked}
+                className="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-sky-500 disabled:opacity-60 transition"
+              >
+                {loading ? (
+                  <span className="flex items-center gap-1">
+                    <span className="animate-spin inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full" />
+                    Analyzing...
+                  </span>
+                ) : 'Analyze Code'}
+              </button>
+            </div>
+          </div>
+
+          {/* Monaco Editor */}
+          <div className="flex-1">
+            <Editor
+              height="100%"
+              language={MONACO_LANG(language)}
+              theme="vs-dark"
+              value={code}
+              onChange={(val) => setCode(val || '')}
+              onMount={handleEditorMount}
+              options={{
+                minimap: { enabled: false },
+                fontSize: 13,
+                scrollBeyondLastLine: false,
+              }}
+            />
+          </div>
+        </div>
+
+        {/* ── Right: Results ────────────────────────────────────────────────── */}
+        <div className="flex flex-col rounded-xl border border-slate-800 bg-slate-950/80 p-3 overflow-y-auto">
+          {/* Results header with Download + Share */}
+          <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+            <h2 className="text-sm font-semibold text-slate-100">AI Findings</h2>
+            {result && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  className="flex items-center gap-1 rounded-md bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-xs font-bold text-slate-200 shadow transition"
+                >
+                  🔗 Share
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold shadow transition bg-sky-700 hover:bg-sky-600 text-white"
+                >
+                  📄 Download PDF
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Limit blocked */}
+          {limitBlocked && (
+            <div className="mb-3 rounded-xl border border-amber-500/30 bg-amber-950/20 p-4">
+              <div className="text-sm font-bold text-amber-300 mb-1">⛔ Daily Limit Reached</div>
+              <p className="text-xs text-amber-200/70 mb-2">
+                You've used all 5 free analyses for today. Upgrade to Pro for unlimited access.
+              </p>
+              <button
+                className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-slate-900 hover:bg-amber-400 transition"
+                onClick={() => alert('Upgrade feature coming soon! 🚀')}
+              >
+                Upgrade to Pro
+              </button>
+            </div>
+          )}
+
+          {error && !limitBlocked && (
+            <p className="mb-2 text-xs text-rose-400 p-2 bg-rose-950/30 rounded border border-rose-900/50">
+              {error}
+            </p>
+          )}
+
+          {!result && !explanation && !simpleExplanation && !error && !limitBlocked && (
+            <div className="flex h-full flex-col items-center justify-center text-center opacity-50">
+              <div className="text-4xl mb-3">🤖</div>
+              <p className="text-xs text-slate-400 max-w-[250px]">
+                Run an analysis, explain the code, or get a beginner-friendly breakdown to get started.
+              </p>
+            </div>
+          )}
+
+          {/* ── Beginner Explanation (green) ─────────────────────────────── */}
+          {simpleExplanation && (
+            <div className="mb-4 rounded-lg bg-emerald-900/20 border border-emerald-500/30 p-4 shadow-lg">
+              <h3 className="text-sm font-bold text-emerald-300 mb-2 flex items-center gap-2">
+                <span>🧒</span> Beginner Explanation
+              </h3>
+              <div className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">
+                {simpleExplanation}
+              </div>
+            </div>
+          )}
+
+          {/* ── Standard Explanation (purple) ────────────────────────────── */}
+          {explanation && (
+            <div className="mb-4 rounded-lg bg-purple-900/20 border border-purple-500/30 p-4 shadow-lg">
+              <h3 className="text-sm font-bold text-purple-300 mb-2 flex items-center gap-2">
+                <span>✨</span> AI Code Explanation
+              </h3>
+              <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
+                {explanation}
+              </div>
+            </div>
+          )}
+
+          {/* ── Analysis results ─────────────────────────────────────────── */}
+          {result && (
+            <div className="space-y-4 text-xs">
+              {/* Score + Complexity */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg border border-slate-700 bg-slate-900 p-3">
+                  <div className="text-[11px] uppercase tracking-wide text-slate-400">Quality Score</div>
+                  <div className={`mt-2 text-2xl font-bold ${scoreColor(result.score)}`}>
+                    {result.score}/100
+                  </div>
+                  <div className="mt-1 h-1.5 w-full rounded-full bg-slate-800">
+                    <div
+                      className={`h-1.5 rounded-full transition-all duration-700 ${
+                        result.score >= 80
+                          ? 'bg-emerald-400'
+                          : result.score >= 60
+                          ? 'bg-yellow-400'
+                          : 'bg-rose-400'
+                      }`}
+                      style={{ width: `${result.score}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="rounded-lg border border-slate-700 bg-slate-900 p-3">
+                  <div className="text-[11px] uppercase tracking-wide text-slate-400">Complexity</div>
+                  <div className="mt-2 text-lg font-semibold text-amber-400">
+                    {result.estimated_complexity}
+                  </div>
+                </div>
+              </div>
+
+              {/* Remaining analyses */}
+              {result.remainingToday != null && (
+                <div
+                  className={`rounded-lg px-3 py-2 text-[11px] font-medium ${
+                    result.remainingToday === 0
+                      ? 'bg-rose-500/10 border border-rose-500/30 text-rose-300'
+                      : 'bg-slate-900 text-slate-400'
+                  }`}
+                >
+                  {result.remainingToday === 0
+                    ? '⛔ No free analyses remaining today'
+                    : `✅ ${result.remainingToday} free analyses remaining today`}
+                </div>
+              )}
+
+              {/* Summary */}
+              {result.summary && (
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-2">Summary</div>
+                  <p className="text-slate-300 bg-slate-900 rounded p-2">{result.summary}</p>
+                </div>
+              )}
+
+              {/* AI Suggestions */}
+              {result.suggestions && result.suggestions.length > 0 && (
+                <div className="mb-4">
+                  <div className="text-[11px] uppercase tracking-wide text-purple-400 font-bold mb-2 flex items-center gap-1">
+                    <span>💡</span> AI Suggestions
+                  </div>
+                  <div className="space-y-2">
+                    {result.suggestions.map((suggestion, idx) => (
+                      <div
+                        key={idx}
+                        className="rounded-md border border-purple-800/50 bg-purple-900/10 px-3 py-2.5 shadow-sm hover:bg-purple-900/20 transition duration-200"
+                      >
+                        <p className="text-purple-100 font-medium">✨ {suggestion}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Bugs */}
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-rose-400 font-bold mb-2">
+                  🐛 P1 Issues ({result.bugs?.length || 0})
+                </div>
+                <div className="space-y-2">
+                  {result.bugs && result.bugs.length > 0 ? (
+                    result.bugs.map((bug, idx) => (
+                      <div key={idx} className="rounded border-l-4 border-rose-500 bg-rose-900/20 px-3 py-2">
+                        <p className="text-rose-200">{bug}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-slate-400 italic bg-slate-900/50 p-2 rounded">No critical bugs detected</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Improvements */}
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-2">
+                  ⚡ Improvements ({result.improvements?.length || 0})
+                </div>
+                <div className="space-y-2">
+                  {result.improvements && result.improvements.length > 0 ? (
+                    result.improvements.map((imp, idx) => (
+                      <div key={idx} className="rounded border-l-4 border-yellow-500 bg-yellow-900/20 px-3 py-2">
+                        <p className="text-yellow-200">{imp}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-slate-400 italic">No improvements suggested</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Security */}
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-2">
+                  🔒 Security ({result.security?.length || 0})
+                </div>
+                <div className="space-y-2">
+                  {result.security && result.security.length > 0 ? (
+                    result.security.map((sec, idx) => (
+                      <div key={idx} className="rounded border-l-4 border-orange-500 bg-orange-900/20 px-3 py-2">
+                        <p className="text-orange-200">{sec}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-slate-400 italic">No security issues found</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── GitHub Import Modal ────────────────────────────────────────────── */}
+      {showGithubModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
+            <h3 className="text-lg font-bold text-white mb-2">Analyze GitHub Repository</h3>
+            <p className="text-sm text-slate-400 mb-6">
+              Enter the URL of a public repository. DevInsight AI will identify the main entry point and analyze it.
+            </p>
+            <input
+              type="text"
+              placeholder="https://github.com/DiwakarNallappagari/DevInsight-AI-"
+              value={githubUrl}
+              onChange={(e) => setGithubUrl(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white focus:border-sky-500 focus:outline-none transition-colors mb-6"
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowGithubModal(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGithubAnalyze}
+                disabled={!githubUrl || githubLoading}
+                className="rounded-lg bg-sky-600 px-6 py-2 text-sm font-bold text-white shadow-lg hover:bg-sky-500 disabled:opacity-50 transition"
+              >
+                Analyze Repo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+export default CodeReviewPage;
