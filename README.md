@@ -94,3 +94,6 @@ All API keys and database credentials are kept private via environment variables
 
 ##  License
 MIT License. Created with ❤️ for developers.
+## 💡 Author
+
+Developed by **Diwakar Nallappagari**
