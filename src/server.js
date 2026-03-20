@@ -16,8 +16,21 @@ const PORT = process.env.PORT || 5000;
 
 // Security & CORS
 app.use(helmet());
+const allowedOrigins = [
+    'http://localhost:5173',
+    'https://dev-insight-ai-five.vercel.app',
+];
+if (process.env.CORS_ORIGIN) {
+    allowedOrigins.push(process.env.CORS_ORIGIN);
+}
 app.use(cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true,
 }));
 
