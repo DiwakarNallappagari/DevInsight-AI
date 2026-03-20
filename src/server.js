@@ -1,144 +1,79 @@
-const express = require("express");
-const cors = require("cors");
-const helmet = require("helmet");
-const rateLimit = require("express-rate-limit");
-const dotenv = require("dotenv");
+require('dotenv').config();
 
-dotenv.config();
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
-const { connectDB } = require("./config/db");
-const authRoutes = require("./routes/authRoutes");
-const analysisRoutes = require("./routes/analysisRoutes");
-const dashboardRoutes = require("./routes/dashboardRoutes");
-const { notFound, errorHandler } = require("./middleware/errorMiddleware");
-const findAvailablePort = require("./utils/portFinder");
-const getDashboardHtml = require("./utils/dashboardHtml");
-const mongoose = require("mongoose");
-const os = require("os");
+const { connectDB } = require('./config/db');
+const authRoutes = require('./routes/authRoutes');
+const analysisRoutes = require('./routes/analysisRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const { errorHandler } = require('./middleware/errorMiddleware');
 
 const app = express();
+const PORT = process.env.PORT || 5000;
 
-// ======================
-// Security Middleware
-// ======================
+// Security & CORS
 app.use(helmet());
-
-app.use(
-  cors({
-    origin: [process.env.CORS_ORIGIN || "http://localhost:5173", "http://localhost:5174"],
+app.use(cors({
+    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
     credentials: true,
-  })
-);
+}));
 
-app.use(express.json());
-
-// ======================
-// Rate Limiting
-// ======================
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 500, // Increased to 500 to allow for telemetry polling
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: "Too many requests from this IP, please try again later.",
+// Rate limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: 'Too many requests, please try again later.',
 });
+app.use('/api/', limiter);
 
-app.use("/api", apiLimiter);
+// Body parsing
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api', analysisRoutes);
+app.use('/api', dashboardRoutes);
 
 // ======================
-// Root Route (Wow Feature #1: Stunning Interactive Dashboard)
+// Health check
 // ======================
-app.get("/", (req, res) => {
-  const dbState = mongoose.connection.readyState;
-  let dbStatus = "Disconnected";
-  if (dbState === 1) dbStatus = "Connected";
-  else if (dbState === 2) dbStatus = "Connecting";
-
-  const html = getDashboardHtml(req.app.locals.port || process.env.PORT || 5000, dbStatus);
-  res.send(html);
+app.get('/health', (req, res) => {
+    res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
 // ======================
-// System Monitor Route (Wow Feature #2: Telemetry API)
+// 🔥 TRACKING ROUTE (DevInsight)
 // ======================
-app.get("/api/system-monitor", (req, res) => {
-  const totalMem = os.totalmem();
-  const freeMem = os.freemem();
-  
-  res.status(200).json({
-    status: "success",
-    data: {
-      uptime: process.uptime(),
-      memory: {
-        total: totalMem,
-        free: freeMem,
-        used: totalMem - freeMem,
-        usagePercent: (((totalMem - freeMem) / totalMem) * 100).toFixed(2)
-      },
-      cpu: {
-        cores: os.cpus().length,
-        model: os.cpus()[0].model,
-        loadavg: os.loadavg()
-      },
-      os: {
-        platform: os.platform(),
-        release: os.release()
-      },
-      timestamp: new Date()
-    }
-  });
+app.get('/track-devinsight', (req, res) => {
+    console.log("🔥 DevInsight AI Opened!");
+    console.log("Time:", new Date());
+    console.log("IP:", req.headers["x-forwarded-for"] || req.socket.remoteAddress);
+
+    res.redirect("https://dev-insight-ai-five.vercel.app");
 });
 
 // ======================
-// Health Check
+// Error handling
 // ======================
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    status: "ok",
-    service: "DevInsight AI API",
-    time: new Date(),
-  });
-});
-
-// ======================
-// API Routes
-// ======================
-app.use("/api/auth", authRoutes);
-app.use("/api", analysisRoutes);
-app.use("/api", dashboardRoutes);
-
-// ======================
-// Error Middleware
-// ======================
-app.use(notFound);
 app.use(errorHandler);
 
 // ======================
-// Server Start
+// Start
 // ======================
-const startServer = async () => {
-  try {
-    const initialPort = parseInt(process.env.PORT || 5000, 10);
-    const PORT = await findAvailablePort(initialPort);
-    app.locals.port = PORT; // Save dynamic port for the dashboard
-
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log("=================================");
-      console.log("🚀 DevInsight AI Backend Started");
-      console.log(`🌐 URL: http://localhost:${PORT}`);
-      console.log(`❤️ Health Check: http://localhost:${PORT}/health`);
-      console.log("=================================");
-    });
-  } catch (err) {
-    console.error("❌ Failed to bind port:", err.message);
-  }
+const start = async () => {
+    try {
+        await connectDB();
+        app.listen(PORT, () => {
+            console.log(`Server running on port ${PORT}`);
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error.message);
+        process.exit(1);
+    }
 };
 
-startServer();
-
-// Then connect DB (separately)
-connectDB().catch((err) => {
-  console.error("❌ MongoDB Connection Error:", err.message);
-});
-
-module.exports = app;
+start();
