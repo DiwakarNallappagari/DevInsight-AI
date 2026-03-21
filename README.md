@@ -99,10 +99,7 @@ All API keys and database credentials are kept private via environment variables
 
 ##  License
 MIT License. Created with ❤️ for developers.
-## Live Demo
-
-Frontend: https://dev-insight-ai-five.vercel.app  
-Backend: https://devinsight-ai-4nap.onrender.com
+ 
 ## Author
 
 Developed by **Diwakar Nallappagari**
