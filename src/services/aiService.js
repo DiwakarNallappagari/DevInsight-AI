@@ -6,7 +6,7 @@ const getAiSuggestions = async (code, language) => {
     // Attempt Gemini first matching user preference
     if (process.env.GEMINI_API_KEY) {
       const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
         {
           contents: [
             {
@@ -70,7 +70,7 @@ const explainCodeSnippet = async (code, language) => {
   try {
     if (process.env.GEMINI_API_KEY) {
       const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
         { contents: [{ parts: [{ text: promptText }] }] }
       );
       return response.data.candidates[0].content.parts[0].text;
@@ -120,7 +120,7 @@ ${code}`;
   try {
     if (process.env.GEMINI_API_KEY) {
       const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
         { contents: [{ parts: [{ text: promptText }] }] }
       );
       return response.data.candidates[0].content.parts[0].text;
