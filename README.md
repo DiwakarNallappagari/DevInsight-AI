@@ -1,6 +1,11 @@
-# DevInsight AI — Advanced Code Analysis & Optimization 🚀
+# DevInsight AI — Advanced Code Analysis & Optimization 
 
 DevInsight AI is an industry-grade code analysis platform that leverages advanced AI to provide real-time quality scores, bug detection, and automated refactoring. 
+🌐 Live Demo
+
+Frontend: https://dev-insight-ai-five.vercel.app
+Backend: https://devinsight-ai-4nap.onrender.com
+
 
 <p align="center">
   <img src="screenshots/dashboard.png" width="45%" />
