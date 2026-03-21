@@ -3,8 +3,8 @@
 DevInsight AI is an industry-grade code analysis platform that leverages advanced AI to provide real-time quality scores, bug detection, and automated refactoring. 
 🌐 Live Demo
 
-Frontend: https://dev-insight-ai-five.vercel.app
-Backend: https://devinsight-ai-4nap.onrender.com
+ https://dev-insight-ai-five.vercel.app
+ 
 
 
 <p align="center">
