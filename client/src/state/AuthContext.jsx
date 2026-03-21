@@ -24,13 +24,6 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    if (token) {
-      api.defaults.headers.common.Authorization = `Bearer ${token}`;
-    } else {
-      delete api.defaults.headers.common.Authorization;
-    }
-  }, [token]);
 
   const login = (data) => {
     setUser(data.user);
