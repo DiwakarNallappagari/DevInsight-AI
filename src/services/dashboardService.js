@@ -29,7 +29,7 @@ const getRemainingUsage = async (userId, role) => {
 };
 
 const getDashboardStats = async (user) => {
-  const userId = user.id || user._id;
+  const userId = user.sub || user.id || user._id;
 
   // Total analyses for this user
   const totalAnalyses = await Analysis.countDocuments({ user: userId });
@@ -201,7 +201,7 @@ const getDashboardStats = async (user) => {
 };
 
 const getHistory = async (user, limit = 20) => {
-  const userId = user.id || user._id;
+  const userId = user.sub || user.id || user._id;
 
   const analyses = await Analysis.find({ user: userId })
     .sort({ createdAt: -1 })

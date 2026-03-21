@@ -55,7 +55,11 @@ const getAiSuggestions = async (code, language) => {
       "Add comprehensive JSDoc/Docstring comments for better maintainability."
     ];
   } catch (error) {
-    console.warn("AI AI Suggestions Error:", error.message);
+    if (error.response) {
+      console.warn("AI Suggestions API Error:", error.response.status, JSON.stringify(error.response.data));
+    } else {
+      console.warn("AI Suggestions Error:", error.message);
+    }
     return ["AI Suggestions unavailable at the moment due to an API error."];
   }
 };
@@ -92,7 +96,11 @@ const explainCodeSnippet = async (code, language) => {
 
     return "AI Explanation is unavailable because no AI API Key (GEMINI_API_KEY, GROQ_API_KEY, or OPENAI_API_KEY) was found in your environment variables.";
   } catch (error) {
-    console.error("AI Explanation Error:", error.message);
+    if (error.response) {
+      console.error("AI Explanation API Error:", error.response.status, JSON.stringify(error.response.data));
+    } else {
+      console.error("AI Explanation Error:", error.message);
+    }
     throw new Error("Failed to generate AI explanation");
   }
 };
@@ -138,7 +146,11 @@ ${code}`;
 
     return "🧒 Simple Explanation: This code gives the computer a set of step-by-step instructions — like a recipe. It reads some information, does a calculation or task with it, then shows you the result. Each line tells the computer exactly what to do next!";
   } catch (error) {
-    console.error("Beginner Explanation Error:", error.message);
+    if (error.response) {
+      console.error("Beginner Explanation API Error:", error.response.status, JSON.stringify(error.response.data));
+    } else {
+      console.error("Beginner Explanation Error:", error.message);
+    }
     throw new Error("Failed to generate beginner explanation");
   }
 };
@@ -186,7 +198,11 @@ ${code}`;
     // Clean up if AI included backticks despite instructions
     return refactoredCode.replace(/^```[a-z]*\n/i, '').replace(/\n```$/i, '').trim();
   } catch (error) {
-    console.error("Refactor Error:", error.message);
+    if (error.response) {
+      console.error("Refactor API Error:", error.response.status, JSON.stringify(error.response.data));
+    } else {
+      console.error("Refactor Error:", error.message);
+    }
     throw new Error("Failed to refactor code");
   }
 };

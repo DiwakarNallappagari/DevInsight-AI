@@ -1,5 +1,13 @@
 require('dotenv').config();
 
+// Logging essential env vars (safely)
+console.log('--- Environment Check ---');
+['MONGO_URI', 'JWT_SECRET', 'GROQ_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY'].forEach(key => {
+    const val = process.env[key];
+    console.log(`${key}: ${val ? `Present (${val.substring(0, 4)}...)` : 'Missing'}`);
+});
+console.log('-------------------------');
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -18,6 +26,7 @@ const PORT = process.env.PORT || 5000;
 app.use(helmet());
 const allowedOrigins = [
     'http://localhost:5173',
+    'http://localhost:5174',
     'https://dev-insight-ai-five.vercel.app',
 ];
 if (process.env.CORS_ORIGIN) {
@@ -25,7 +34,8 @@ if (process.env.CORS_ORIGIN) {
 }
 app.use(cors({
     origin: function (origin, callback) {
-        if (!origin || allowedOrigins.includes(origin)) {
+        // Allow all localhost origins in development
+        if (!origin || allowedOrigins.includes(origin) || origin.startsWith('http://localhost:')) {
             callback(null, true);
         } else {
             callback(new Error('Not allowed by CORS'));

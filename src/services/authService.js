@@ -4,6 +4,7 @@ const User = require('../models/User');
 const generateToken = (user) => {
   const payload = {
     sub: user._id,
+    id: user._id,
     email: user.email,
     role: user.role,
   };
@@ -45,30 +46,11 @@ const registerUser = async ({ name, email, password }) => {
 
 const loginUser = async ({ email, password }) => {
   const user = await User.findOne({ email });
-  // In development, auto-create the user if not found to simplify testing
   if (!user) {
-    if (process.env.NODE_ENV !== 'production') {
-      const name = email.split('@')[0];
-      const newUser = new User({ name, email, password });
-      await newUser.save();
-      const token = generateToken(newUser);
-      return {
-        user: {
-          id: newUser._id,
-          name: newUser.name,
-          email: newUser.email,
-          role: newUser.role,
-          createdAt: newUser.createdAt,
-        },
-        token,
-      };
-    }
-
     const error = new Error('Invalid credentials');
     error.statusCode = 401;
     throw error;
   }
-
   const isMatch = await user.comparePassword(password);
   if (!isMatch) {
     const error = new Error('Invalid credentials');

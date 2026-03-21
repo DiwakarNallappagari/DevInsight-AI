@@ -361,7 +361,8 @@ const analyzeCode = async ({ user, code, language }) => {
     throw error;
   }
 
-  await checkUsageLimit(user.id || user._id, user.role);
+  const userId = user.sub || user.id || user._id;
+  await checkUsageLimit(userId, user.role);
 
   const lines = getLines(code);
 
@@ -430,7 +431,7 @@ const analyzeCode = async ({ user, code, language }) => {
 
   // Save to database
   const analysis = await Analysis.create({
-    user: user.id || user._id,
+    user: userId,
     code,
     language: language || 'unknown',
     prompt: `Analysis of ${language} code`,
