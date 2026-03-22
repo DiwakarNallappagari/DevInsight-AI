@@ -1,10 +1,27 @@
 const { ChatOpenAI } = require("@langchain/openai");
 const axios = require("axios");
 
+const resolveApiKeys = () => {
+  let geminiKey = process.env.GEMINI_API_KEY?.trim() || "";
+  let groqKey = process.env.GROQ_API_KEY?.trim() || "";
+  let openaiKey = process.env.OPENAI_API_KEY?.trim() || "";
+
+  // Handle Groq key placed in openaiKey
+  if (openaiKey && openaiKey.startsWith("gsk_")) {
+    if (!groqKey) groqKey = openaiKey;
+    openaiKey = "";
+  }
+  // Handle OpenAI key placed in groqKey
+  if (groqKey && (groqKey.startsWith("sk-") || groqKey.startsWith("sk-proj-"))) {
+    if (!openaiKey) openaiKey = groqKey;
+    groqKey = "";
+  }
+  
+  return { geminiKey, groqKey, openaiKey };
+};
+
 const getAiSuggestions = async (code, language) => {
-  const geminiKey = process.env.GEMINI_API_KEY?.trim();
-  const groqKey = process.env.GROQ_API_KEY?.trim();
-  const openaiKey = process.env.OPENAI_API_KEY?.trim();
+  const { geminiKey, groqKey, openaiKey } = resolveApiKeys();
 
   try {
     // Attempt Gemini first matching user preference
@@ -74,9 +91,7 @@ const getAiSuggestions = async (code, language) => {
 
 const explainCodeSnippet = async (code, language) => {
   const promptText = `Explain the following ${language} code in 2-3 clear, concise paragraphs. Focus on what it does, how it works, and any notable patterns or potential issues.\n\nCODE:\n${code}`;
-  const geminiKey = process.env.GEMINI_API_KEY?.trim();
-  const groqKey = process.env.GROQ_API_KEY?.trim();
-  const openaiKey = process.env.OPENAI_API_KEY?.trim();
+  const { geminiKey, groqKey, openaiKey } = resolveApiKeys();
 
   try {
     if (geminiKey && !geminiKey.includes("your_")) {
@@ -132,9 +147,7 @@ Rules:
 CODE:
 ${code}`;
 
-  const geminiKey = process.env.GEMINI_API_KEY?.trim();
-  const groqKey = process.env.GROQ_API_KEY?.trim();
-  const openaiKey = process.env.OPENAI_API_KEY?.trim();
+  const { geminiKey, groqKey, openaiKey } = resolveApiKeys();
 
   try {
     if (geminiKey && !geminiKey.includes("your_")) {
@@ -189,9 +202,7 @@ Instructions:
 CODE:
 ${code}`;
 
-  const geminiKey = process.env.GEMINI_API_KEY?.trim();
-  const groqKey = process.env.GROQ_API_KEY?.trim();
-  const openaiKey = process.env.OPENAI_API_KEY?.trim();
+  const { geminiKey, groqKey, openaiKey } = resolveApiKeys();
 
   try {
     let refactoredCode = "";
