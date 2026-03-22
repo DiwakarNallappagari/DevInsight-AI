@@ -1,4 +1,5 @@
 const Analysis = require('../models/Analysis');
+const mongoose = require('mongoose');
 
 const FREE_USER_DAILY_LIMIT = 50;
 
@@ -30,6 +31,7 @@ const getRemainingUsage = async (userId, role) => {
 
 const getDashboardStats = async (user) => {
   const userId = user.sub || user.id || user._id;
+  const userObjectId = new mongoose.Types.ObjectId(userId);
 
   // Total analyses for this user
   const totalAnalyses = await Analysis.countDocuments({ user: userId });
@@ -39,7 +41,7 @@ const getDashboardStats = async (user) => {
   const rawWeek = await Analysis.aggregate([
     {
       $match: {
-        user: userId,
+        user: userObjectId,
         createdAt: { $gte: start, $lt: end },
       },
     },
@@ -76,7 +78,7 @@ const getDashboardStats = async (user) => {
 
   // Most used language for this user
   const langAgg = await Analysis.aggregate([
-    { $match: { user: userId } },
+    { $match: { user: userObjectId } },
     {
       $group: {
         _id: '$language',
@@ -91,14 +93,14 @@ const getDashboardStats = async (user) => {
 
   // ── Average Score ─────────────────────────────────────────────────────────
   const scoreAgg = await Analysis.aggregate([
-    { $match: { user: userId } },
+    { $match: { user: userObjectId } },
     { $group: { _id: null, avg: { $avg: '$score' } } },
   ]);
   const averageScore = scoreAgg[0]?.avg != null ? Math.round(scoreAgg[0].avg) : null;
 
   // ── Language Distribution (pie chart data) ────────────────────────────────
   const langDistAgg = await Analysis.aggregate([
-    { $match: { user: userId } },
+    { $match: { user: userObjectId } },
     {
       $group: {
         _id: '$language',
