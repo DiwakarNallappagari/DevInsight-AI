@@ -1,4 +1,4 @@
-const { getDashboardStats, getHistory } = require('../services/dashboardService');
+const { getDashboardStats, getHistory, getSystemStats } = require('../services/dashboardService');
 
 const getStats = async (req, res, next) => {
   try {
@@ -34,9 +34,19 @@ const getUserHistory = async (req, res, next) => {
   }
 };
 
+const getSystemMonitor = async (req, res, next) => {
+  try {
+    const stats = await getSystemStats();
+    res.status(200).json({ data: stats });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getStats,
   getUserHistory,
+  getSystemMonitor,
 };
 
 

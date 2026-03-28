@@ -1,5 +1,6 @@
 const Analysis = require('../models/Analysis');
 const mongoose = require('mongoose');
+const os = require('os');
 
 const FREE_USER_DAILY_LIMIT = 50;
 
@@ -224,7 +225,28 @@ const getHistory = async (user, limit = 20) => {
   }));
 };
 
+const getSystemStats = async () => {
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const usedMem = totalMem - freeMem;
+  const usagePercent = ((usedMem / totalMem) * 100).toFixed(1);
+
+  return {
+    cpu: {
+      loadavg: os.loadavg(),
+      cores: os.cpus().length,
+    },
+    memory: {
+      total: totalMem,
+      free: freeMem,
+      used: usedMem,
+      usagePercent: parseFloat(usagePercent),
+    },
+  };
+};
+
 module.exports = {
   getDashboardStats,
   getHistory,
+  getSystemStats,
 };
